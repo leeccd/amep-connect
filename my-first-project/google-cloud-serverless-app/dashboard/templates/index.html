@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pipeline Monitor | Document Processing Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="brand-section">
+                <h1>Document Processing Pipeline</h1>
+                <p>GCP Serverless Event-Driven Dashboard</p>
+            </div>
+            <div>
+                {% if is_mock %}
+                <span class="badge-mode mock">
+                    <span style="display:inline-block; width:8px; height:8px; background-color:#ef4444; border-radius:50%"></span>
+                    Simulated Preview Mode
+                </span>
+                {% else %}
+                <span class="badge-mode live">
+                    <span style="display:inline-block; width:8px; height:8px; background-color:#10b981; border-radius:50%"></span>
+                    GCP Live Connection
+                </span>
+                {% endif %}
+            </div>
+        </header>
+
+        <!-- Stats Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Processed Files</h3>
+                <div class="value">{{ total_docs }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>Average Words / Doc</h3>
+                <div class="value">{{ avg_words }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>Unique Pipeline Tags</h3>
+                <div class="value">{{ unique_tags|length }}</div>
+            </div>
+        </div>
+
+        <!-- Filter Card -->
+        <div class="filter-card">
+            <form action="/" method="GET" class="filter-form">
+                <label for="tag">Filter by Tag:</label>
+                <select name="tag" id="tag" class="filter-select">
+                    <option value="">All Documents</option>
+                    {% for tag in unique_tags %}
+                    <option value="{{ tag }}" {% if selected_tag == tag %}selected{% endif %}>{{ tag }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn">Apply Filter</button>
+                {% if selected_tag %}
+                <a href="/" class="btn btn-secondary">Reset</a>
+                {% endif %}
+            </form>
+        </div>
+
+        <!-- Table Card -->
+        <div class="table-card">
+            <div class="table-wrapper">
+                {% if documents %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Document details</th>
+                            <th>Word Count</th>
+                            <th>Tags</th>
+                            <th>OCR Text Preview</th>
+                            <th>Processed Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in documents %}
+                        <tr>
+                            <td>
+                                <div class="doc-name">{{ doc.filename }}</div>
+                                <div class="doc-meta">
+                                    Bucket: gs://{{ doc.bucket }} &middot; Size: {{ (doc.size / 1024) | round(1) }} KB
+                                </div>
+                            </td>
+                            <td><strong>{{ doc.word_count }}</strong> words</td>
+                            <td>
+                                {% for tag in doc.tags %}
+                                <a href="/?tag={{ tag }}" class="badge-tag">{{ tag }}</a>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                <div class="preview-text" title="{{ doc.ocr_text_preview }}">
+                                    {{ doc.ocr_text_preview }}
+                                </div>
+                            </td>
+                            <td>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                                    {{ doc.process_timestamp[:16].replace('T', ' ') }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <h4>No Documents Found</h4>
+                    <p>No document metadata matches the filter or has been streamed into BigQuery yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
