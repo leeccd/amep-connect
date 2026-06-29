@@ -1,11 +1,10 @@
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 
-# This function will analyze student text for errors
 def analyze_text(text: str) -> dict:
     """
     Analyzes student text for common English errors.
-    Returns a dictionary with error categories.
+    This function is called by the agent.
     """
     errors = {
         "word_order": 0,
@@ -15,56 +14,69 @@ def analyze_text(text: str) -> dict:
         "confidence_score": 0.0
     }
     
-    # Simple rule-based analysis (will be enhanced with Gemini later)
-    words = text.lower().split()
+    text_lower = text.lower()
+    words = text_lower.split()
     
-    # Word order check: look for common inversion errors
-    if "is" in words and any(word in words for word in ["what", "where", "when", "how"]):
-        # Check for subject-verb inversion errors
-        errors["word_order"] += 1
+    # --- WORD ORDER: Missing auxiliary verb before 'going' ---
+    if "going" in text_lower:
+        # Check if 'am/is/are' comes before 'going'
+        # Simple check: if 'going' appears without 'am going', 'is going', 'are going'
+        has_auxiliary = any(aux in text_lower for aux in ["am going", "is going", "are going"])
+        if not has_auxiliary:
+            errors["word_order"] += 1
     
-    # Spelling: check for common misspellings (simplified example)
-    common_misspellings = {
-        "teh": "the",
+    # --- SPELLING: Common misspellings ---
+    misspellings = {
+        "yestaday": "yesterday",
+        "tommorow": "tomorrow",
+        "definately": "definitely",
+        "seperate": "separate",
         "recieve": "receive",
-        "definately": "definitely"
+        "buyed": "bought",
+        "buyd": "bought",
+        "teh": "the",
+        "thier": "their",
     }
+    
     for word in words:
-        if word in common_misspellings:
+        if word in misspellings:
             errors["spelling"] += 1
     
-    # Grammar: check for missing articles
-    if "the" not in words and "a" not in words and "an" not in words:
+    # --- GRAMMAR: Irregular past tense ---
+    if "buyed" in text_lower or "buyd" in text_lower:
         errors["grammar"] += 1
     
-    # Register: check for informal language in formal context (simplified)
-    informal_words = ["gonna", "wanna", "kinda", "sorta"]
+    # --- GRAMMAR: Missing articles ---
+    common_nouns = ["shop", "school", "work", "home", "hospital", "restaurant", "park", "city", "beach"]
+    for noun in common_nouns:
+        if noun in text_lower:
+            # Check if noun appears without article
+            # Simple: if 'the' or 'a' or 'an' doesn't appear before the noun
+            # This is a simplified check
+            if f"the {noun}" not in text_lower and f"a {noun}" not in text_lower and f"an {noun}" not in text_lower:
+                errors["grammar"] += 1
+                break  # Count once per submission for this type
+    
+    # --- REGISTER: Informal words ---
+    informal = ["gonna", "wanna", "kinda", "sorta", "cuz", "coz", "lemme", "ain't"]
     for word in words:
-        if word in informal_words:
+        if word in informal:
             errors["register"] += 1
     
-    # Confidence score (higher = more errors found)
+    # --- CONFIDENCE SCORE ---
     total_errors = sum(errors.values())
-    errors["confidence_score"] = min(1.0, total_errors / 10)
+    errors["confidence_score"] = min(1.0, total_errors / 3.0)
     
     return errors
 
 # Create the Diagnostic Agent
 diagnostic_agent = Agent(
     name="diagnostic_agent",
-    description="Analyzes student submissions for errors in word order, spelling, grammar, and register",
+    description="Analyzes student submissions for errors",
     model="gemini-2.0-flash",
     instruction="""
-    You are a Diagnostic Agent for AMEP Connect.
-    Your role is to analyze student English submissions and identify errors.
-    
-    Use the analyze_text tool to categorize errors as:
-    - Word Order (WO): Incorrect sentence structure
-    - Spelling (Sp): Misspelled words
-    - Grammar (Gr): Issues with articles, verb tense, etc.
-    - Register (RD): Using informal language in formal contexts
-    
-    After analysis, provide a brief summary of the error types found.
+    You are a Diagnostic Agent. Use the analyze_text tool to analyze student English for errors.
+    Report findings clearly.
     """,
     tools=[FunctionTool(analyze_text)]
 )

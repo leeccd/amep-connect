@@ -6,14 +6,48 @@ Interactive interface for the multi-agent system
 import streamlit as st
 import sys
 import os
+import re
+import datetime
+
+def log(message):
+    """Print a timestamped log message"""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] {message}")
 
 # Add parent directory to path to import agents
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import agents
 from amep_connect.diagnostic_agent import analyze_text
 from amep_connect.scaffolding_agent import generate_scaffolding
 from amep_connect.admin_agent import track_progress
 from mcp_server.server import mcp_server
+
+# Security functions (defined here to avoid import issues)
+def is_safe_text(text: str) -> bool:
+    """Quick check if text is safe to process."""
+    patterns = [
+        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # email
+        r'\b\d{10}\b',  # phone
+        r'\b\d+\s+[A-Za-z]+\s+(?:Street|St|Road|Rd|Avenue|Ave)\b',  # address
+        r'\b(?:[A-Z]{1,2}\d{6,8})\b',  # Australian visa
+    ]
+    for pattern in patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            return False
+    return True
+
+def mask_pii(text: str) -> str:
+    """Quick function to mask PII in text."""
+    # Mask emails
+    text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[REDACTED]', text)
+    # Mask phone numbers
+    text = re.sub(r'\b\d{10}\b', '[REDACTED]', text)
+    # Mask addresses (simplified)
+    text = re.sub(r'\b\d+\s+[A-Za-z]+\s+(?:Street|St|Road|Rd|Avenue|Ave)\b', '[REDACTED]', text)
+    # Mask Australian visa numbers
+    text = re.sub(r'\b(?:[A-Z]{1,2}\d{6,8})\b', '[REDACTED]', text)
+    return text
 
 # Page configuration
 st.set_page_config(
@@ -46,9 +80,9 @@ with st.sidebar:
     
     st.header("CSWE III Standards")
     standards = mcp_server.get_standards()
-    for skill, items in list(standards.items())[:2]:  # Show only first 2
+    for skill, items in list(standards.items())[:2]:
         with st.expander(f"{skill.upper()}"):
-            for item in items[:2]:  # Show only first 2
+            for item in items[:2]:
                 st.write(f"- {item}")
     
     st.divider()
@@ -76,20 +110,26 @@ if st.button("🚀 Analyze & Generate", type="primary"):
         st.warning("Please enter some text to analyze.")
     else:
         with st.spinner("Processing with AMEP Connect agents..."):
+              # --- ADD THESE PRINT STATEMENTS ---
+            print("\n" + "="*50)
+            print("📝 Processing student submission...")
+            print(f"   Text: {student_text}")
+            print("="*50)
+            # ------------------------------------
             # Step 1: Security Check
-            from amep_connect.tools.security import is_safe_text, mask_pii
-            
             if not is_safe_text(student_text):
+                print("⚠️ PII detected - masking...")
                 st.warning("⚠️ Sensitive information detected. Masking PII...")
                 masked_text = mask_pii(student_text)
                 st.info(f"Text after PII masking: {masked_text}")
-                # Use masked text for processing
                 text_to_process = masked_text
             else:
+                print("✅ No PII detected")
                 text_to_process = student_text
             
             # Step 2: Diagnostic Agent
             st.subheader("🔍 Step 1: Diagnostic Analysis")
+            print("🔍 Diagnostic Agent: Analyzing text...")
             errors = analyze_text(text_to_process)
             
             # Display error breakdown
@@ -107,13 +147,13 @@ if st.button("🚀 Analyze & Generate", type="primary"):
             
             # Step 3: Scaffolding Agent
             st.subheader("📚 Step 2: Personalized Interventions")
-            interventions = generate_scaffolding(errors)
+            interventions = generate_scaffolding(errors, text_to_process)
             
             for category, items in interventions.items():
                 if items and category != "confidence_score":
                     with st.expander(f"📖 {category.upper()} Exercises"):
                         for item in items:
-                            if item.startswith("🔹") or item.startswith("🌟"):
+                            if item.startswith("🔹") or item.startswith("🌟") or item.startswith("📝"):
                                 st.write(item)
                             else:
                                 st.write(f"  {item}")
